@@ -11,9 +11,11 @@ import java.time.LocalDateTime;
  * Entity FileMetadata - ánh xạ tới bảng "file_metadata".
  *
  * Lưu ý quan trọng: entity này KHÔNG lưu nội dung file (nội dung file đã mã
- * hóa AES-256 được lưu riêng trên ổ đĩa/storage, đường dẫn ghi ở "filePath").
+ * hóa AES-256 được lưu ở object storage - xem package {@code storage},
+ * "storageKey" là object key/tên đối tượng trên đó, KHÔNG phải đường dẫn ổ
+ * đĩa local nữa kể từ khi chuyển sang MinIO).
  * Đây chỉ là bảng metadata mô tả:
- *   1) File nằm ở đâu (filePath) và tên gốc là gì (fileName).
+ *   1) File nằm ở đâu (storageKey) và tên gốc là gì (fileName).
  *   2) Ai được phép giải mã file (accessPolicy - biểu thức thuộc tính dạng
  *      AND/OR, ví dụ: "(department:CNTT AND position:giang_vien) OR role:ADMIN").
  *   3) Khóa AES dùng để mã hóa nội dung file, nhưng bản thân khóa AES này lại
@@ -41,12 +43,14 @@ public class FileMetadata {
     @Column(name = "file_name", nullable = false)
     private String fileName;
 
-    // Đường dẫn thực tế trên storage tới file NỘI DUNG ĐÃ MÃ HÓA (ciphertext),
-    // ví dụ "storage/2026/05/uuid_bao_cao.pdf.enc". Không trùng với fileName
-    // vì tên lưu trên đĩa cần là định danh duy nhất (UUID) để tránh đụng độ.
+    // Object key trên object storage (MinIO) tới file NỘI DUNG ĐÃ MÃ HÓA
+    // (ciphertext), ví dụ "3f2a1e-uuid.enc". Không trùng với fileName vì key
+    // lưu trữ cần là định danh duy nhất (UUID) để tránh đụng độ. Cột DB vẫn
+    // tên "file_path" (giữ nguyên từ trước khi có MinIO) để khỏi cần thêm
+    // migration đổi tên cột - chỉ đổi tên/ý nghĩa ở tầng Java cho rõ ràng.
     @NotBlank
     @Column(name = "file_path", nullable = false)
-    private String filePath;
+    private String storageKey;
 
     // Biểu thức chính sách truy cập dạng AND/OR trên các attributeName,
     // ví dụ: "(department:CNTT AND position:giang_vien) OR role:ADMIN".
@@ -74,6 +78,16 @@ public class FileMetadata {
 
     @Column(name = "content_type", length = 100)
     private String contentType;
+
+    /**
+     * SHA-256 (hex, 64 ký tự) của nội dung file GỐC (plaintext), tính lúc
+     * upload - dùng để phát hiện can thiệp: sau khi giải mã lúc download, hệ
+     * thống hash lại và so khớp (xem ContentIntegrityService). Nullable vì
+     * các file upload TRƯỚC khi có tính năng này chưa có hash - download vẫn
+     * cho qua bình thường (bỏ qua bước kiểm tra) thay vì báo lỗi oan.
+     */
+    @Column(name = "content_hash", length = 64)
+    private String contentHash;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

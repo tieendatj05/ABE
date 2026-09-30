@@ -1,0 +1,14 @@
+# ---- Build stage ----
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# ---- Runtime stage: phục vụ file tĩnh đã build bằng nginx, proxy /api sang
+# backend (thay cho Vite dev proxy chỉ dùng lúc `npm run dev`) ----
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80

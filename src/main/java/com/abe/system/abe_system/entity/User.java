@@ -62,6 +62,25 @@ public class User {
     private LocalDateTime createdAt;
 
     /**
+     * Secret TOTP (Base32) dùng để sinh/kiểm mã 6 số Google Authenticator -
+     * BẮT BUỘC với role ADMIN/DEPT_ADMIN (xem AuthService.login). Nullable vì
+     * DATA_OWNER/DATA_USER không cần 2FA, và ADMIN/DEPT_ADMIN mới tạo cũng
+     * chưa có secret cho tới lần đăng nhập đầu tiên (lúc đó mới sinh + bắt
+     * quét QR để kích hoạt - xem twoFactorEnabled).
+     */
+    @Column(name = "totp_secret", length = 64)
+    private String totpSecret;
+
+    /**
+     * true = đã quét QR và xác nhận mã đúng ít nhất 1 lần (2FA đã kích hoạt
+     * thật sự) - false = chưa kích hoạt, lần đăng nhập tới sẽ bị bắt setup lại
+     * (kể cả khi totpSecret đã có, vì secret có thể đã sinh nhưng chưa xác nhận).
+     */
+    @Builder.Default
+    @Column(name = "two_factor_enabled", nullable = false)
+    private boolean twoFactorEnabled = false;
+
+    /**
      * Phòng ban/khoa mà user này trực thuộc. Nullable vì:
      * (1) các user tạo trước khi tính năng này ra đời (dữ liệu cũ) chưa có phòng ban,
      * (2) tài khoản ADMIN toàn cục không nhất thiết thuộc phòng ban nào.

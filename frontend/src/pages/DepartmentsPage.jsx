@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../api/client';
+import { useLanguage } from '../i18n/LanguageContext';
 import Banner from '../components/Banner';
 import { formatDate } from '../utils/format';
 
@@ -7,6 +8,7 @@ import { formatDate } from '../utils/format';
 // có thành DEPT_ADMIN của 1 phòng ban - nền tảng cho mô hình ABE phi tập
 // trung hoá (mỗi phòng ban tự quản lý attribute/user của mình).
 export default function DepartmentsPage() {
+  const { t } = useLanguage();
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
@@ -36,9 +38,9 @@ export default function DepartmentsPage() {
     setLoading(true);
     setError('');
     Promise.all([loadDepartments(), loadUsers()])
-      .catch((err) => setError(err.message || 'Không tải được dữ liệu'))
+      .catch((err) => setError(err.message || t('departments.loadFailed')))
       .finally(() => setLoading(false));
-  }, [loadDepartments, loadUsers]);
+  }, [loadDepartments, loadUsers, t]);
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -55,7 +57,7 @@ export default function DepartmentsPage() {
       setNewDesc('');
       await loadDepartments();
     } catch (err) {
-      setError(err.message || 'Tạo phòng ban thất bại');
+      setError(err.message || t('departments.createFailed'));
     } finally {
       setCreating(false);
     }
@@ -68,7 +70,7 @@ export default function DepartmentsPage() {
       await apiFetch(`/api/departments/${id}`, { method: 'DELETE' });
       await loadDepartments();
     } catch (err) {
-      setError(err.message || 'Xoá phòng ban thất bại');
+      setError(err.message || t('departments.deleteFailed'));
     }
   }
 
@@ -83,12 +85,12 @@ export default function DepartmentsPage() {
         method: 'POST',
         body: { userId: Number(promoteUserId), departmentId: Number(promoteDeptId) },
       });
-      setSuccess(`Đã phong "${promoted.username}" làm DEPT_ADMIN của "${promoted.departmentName}"`);
+      setSuccess(t('departments.promoteSuccess', { username: promoted.username, department: promoted.departmentName }));
       setPromoteUserId('');
       setPromoteDeptId('');
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Phong DEPT_ADMIN thất bại');
+      setError(err.message || t('departments.promoteFailed'));
     } finally {
       setPromoting(false);
     }
@@ -97,53 +99,53 @@ export default function DepartmentsPage() {
   if (loading) {
     return (
       <div className="page">
-        <p>Đang tải...</p>
+        <p>{t('common.loading')}</p>
       </div>
     );
   }
 
   return (
     <div className="page">
-      <h1>Quản lý phòng ban</h1>
+      <h1>{t('departments.title')}</h1>
       <Banner message={error} />
       <Banner type="success" message={success} />
 
       <section className="card">
-        <h2>Danh sách khoa / phòng ban</h2>
+        <h2>{t('departments.listTitle')}</h2>
         <form className="inline-form" onSubmit={handleCreate}>
           <input
             type="text"
-            placeholder="Tên, ví dụ Khoa Nội"
+            placeholder={t('departments.namePlaceholder')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             required
           />
           <input
             type="text"
-            placeholder="Mã, ví dụ NOI"
+            placeholder={t('departments.codePlaceholder')}
             value={newCode}
             onChange={(e) => setNewCode(e.target.value)}
             required
           />
           <input
             type="text"
-            placeholder="Mô tả"
+            placeholder={t('departments.descPlaceholder')}
             value={newDesc}
             onChange={(e) => setNewDesc(e.target.value)}
           />
           <button type="submit" disabled={creating}>
-            {creating ? 'Đang tạo...' : 'Tạo phòng ban'}
+            {creating ? t('departments.creating') : t('departments.create')}
           </button>
         </form>
 
         <table className="table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Tên</th>
-              <th>Mã</th>
-              <th>Mô tả</th>
-              <th>Ngày tạo</th>
+              <th>{t('departments.colId')}</th>
+              <th>{t('departments.colName')}</th>
+              <th>{t('departments.colCode')}</th>
+              <th>{t('departments.colDesc')}</th>
+              <th>{t('departments.colDate')}</th>
               <th></th>
             </tr>
           </thead>
@@ -157,14 +159,14 @@ export default function DepartmentsPage() {
                 <td>{formatDate(d.createdAt)}</td>
                 <td>
                   <button className="btn-danger" onClick={() => handleDelete(d.id)}>
-                    Xoá
+                    {t('common.delete')}
                   </button>
                 </td>
               </tr>
             ))}
             {departments.length === 0 && (
               <tr>
-                <td colSpan={6}>Chưa có phòng ban nào.</td>
+                <td colSpan={6}>{t('departments.empty')}</td>
               </tr>
             )}
           </tbody>
@@ -172,22 +174,19 @@ export default function DepartmentsPage() {
       </section>
 
       <section className="card">
-        <h2>Phong DEPT_ADMIN (KGC phòng ban)</h2>
-        <p>
-          Chọn 1 user hiện có và 1 phòng ban - user đó sẽ trở thành DEPT_ADMIN của phòng ban này,
-          được tự quản lý attribute và user trong phạm vi phòng ban đó (mô hình ABE phi tập trung hoá).
-        </p>
+        <h2>{t('departments.promoteTitle')}</h2>
+        <p>{t('departments.promoteDesc')}</p>
         <form className="inline-form" onSubmit={handlePromote}>
           <select value={promoteUserId} onChange={(e) => setPromoteUserId(e.target.value)} required>
-            <option value="">-- Chọn user --</option>
+            <option value="">{t('departments.chooseUserOption')}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.username} ({u.role}{u.departmentName ? `, ${u.departmentName}` : ''})
+                {u.username} ({t(`role.${u.role}`)}{u.departmentName ? `, ${u.departmentName}` : ''})
               </option>
             ))}
           </select>
           <select value={promoteDeptId} onChange={(e) => setPromoteDeptId(e.target.value)} required>
-            <option value="">-- Chọn phòng ban --</option>
+            <option value="">{t('departments.choosDeptOption')}</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -195,7 +194,7 @@ export default function DepartmentsPage() {
             ))}
           </select>
           <button type="submit" disabled={promoting}>
-            {promoting ? 'Đang phong...' : 'Phong DEPT_ADMIN'}
+            {promoting ? t('departments.promoting') : t('departments.promote')}
           </button>
         </form>
       </section>

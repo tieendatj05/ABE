@@ -11,13 +11,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.util.List;
 import java.util.Set;
 
 /**
  * Ghi audit log cho mọi lần upload/download/xoá file - yêu cầu compliance của
- * hệ thống y tế (phải truy vết được ai truy cập/cố truy cập hồ sơ nào).
+ * hệ thống giáo dục (phải truy vết được ai truy cập/cố truy cập tài liệu nào,
+ * ví dụ chứng minh không ai mở đề thi trước ngày thi).
  *
  * Mọi method record* đều:
  * 1) Chạy trong transaction MỚI (REQUIRES_NEW), độc lập với transaction của
@@ -27,7 +29,14 @@ import java.util.Set;
  *    được đánh dấu chỉ-đọc.
  * 2) Nuốt (swallow) mọi exception, chỉ log cảnh báo - việc ghi audit log
  *    KHÔNG BAO GIỜ được phép làm hỏng thao tác nghiệp vụ chính (upload/
- *    download/xoá file vẫn phải thành công dù audit log ghi lỗi).
+ *    download/xoá file vẫn phải thành công dù audit log ghi lỗi). QUAN TRỌNG:
+ *    bắt exception thôi CHƯA ĐỦ - phải gọi thêm setRollbackOnly() trên chính
+ *    giao dịch REQUIRES_NEW này. Nếu không, khi INSERT lỗi thật ở tầng DB
+ *    (từng xảy ra: constraint CHECK cũ thiếu giá trị enum mới), Postgres đánh
+ *    dấu transaction đó "aborted" - method vẫn coi như trả về bình thường nên
+ *    Spring sẽ thử COMMIT thay vì ROLLBACK, và COMMIT 1 transaction đã aborted
+ *    sẽ ném ra 1 exception KHÁC, muộn hơn, "nuốt" luôn cả exception nghiệp vụ
+ *    thật (vd ContentIntegrityException) mà FileService định ném ra sau đó.
  */
 @Slf4j
 @Service
@@ -55,6 +64,12 @@ public class AuditLogService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordIntegrityViolation(FileMetadata file, User requester) {
+        safeSave(AuditAction.INTEGRITY_VIOLATION, file, file.getOwner(), requester,
+                "SHA-256 của nội dung giải mã không khớp hash lưu lúc upload - tài liệu khả nghi bị can thiệp");
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordDelete(Long fileId, String fileName, String accessPolicy, User owner, User requester) {
         String detail = requester.getId().equals(owner.getId())
                 ? null
@@ -73,6 +88,7 @@ public class AuditLogService {
                     .build());
         } catch (Exception ex) {
             log.warn("Không ghi được audit log DELETE cho fileId={}", fileId, ex);
+            markRollbackOnly();
         }
     }
 
@@ -91,6 +107,17 @@ public class AuditLogService {
                     .build());
         } catch (Exception ex) {
             log.warn("Không ghi được audit log {} cho fileId={}", action, file.getId(), ex);
+            markRollbackOnly();
+        }
+    }
+
+    // Bắt buộc gọi khi swallow exception trong 1 giao dịch REQUIRES_NEW - xem
+    // javadoc điểm (2) ở đầu class để hiểu vì sao thiếu bước này gây lỗi âm thầm.
+    private void markRollbackOnly() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (Exception ignored) {
+            // Khong co transaction dang active (vd goi ngoai ngu canh Spring quan ly) - bo qua.
         }
     }
 

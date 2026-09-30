@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
  *
  * Ghi lại MỌI lần truy cập/cố truy cập file (upload, download thành công,
  * download bị từ chối, xoá) - đây là yêu cầu compliance đặc trưng của hệ
- * thống y tế (phải chứng minh được ai đã xem/cố xem hồ sơ nào, khi nào).
+ * thống giáo dục (phải chứng minh được ai đã xem/cố xem tài liệu nào, khi nào -
+ * vd chứng minh không ai mở đề thi trước ngày thi).
  *
  * Cố tình KHÔNG dùng @ManyToOne/FK tới FileMetadata hay User mà chỉ lưu các
  * trường "snapshot" (id + tên tại thời điểm xảy ra sự kiện): nhờ vậy log vẫn

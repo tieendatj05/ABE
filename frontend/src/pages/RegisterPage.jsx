@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Banner from '../components/Banner';
-import MorphingBlobBackground from '../components/MorphingBlobBackground';
+import LanguageToggle from '../components/LanguageToggle';
+import AuthBackgroundBlobs from '../components/AuthBackgroundBlobs';
 
 const initialForm = {
   username: '',
@@ -16,6 +18,7 @@ const initialForm = {
 
 export default function RegisterPage() {
   const { register } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
   const [departments, setDepartments] = useState([]);
@@ -45,7 +48,7 @@ export default function RegisterPage() {
       });
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err.message || 'Đăng ký thất bại');
+      setError(err.message || t('register.failed'));
     } finally {
       setLoading(false);
     }
@@ -53,38 +56,36 @@ export default function RegisterPage() {
 
   return (
     <div className="auth-page">
-      <MorphingBlobBackground />
+      <AuthBackgroundBlobs />
       <div className="auth-content">
-        <h1 className="auth-title">Đăng ký tài khoản</h1>
+        <LanguageToggle />
+        <Link to="/welcome" className="auth-brand-link">
+          {t('login.backToWelcome')}
+        </Link>
+        <h1 className="auth-title">{t('register.title')}</h1>
         <Banner message={error} />
         <form className="card form glass-card" onSubmit={handleSubmit}>
           <label>
-            Tên đăng nhập
+            {t('register.username')}
             <input type="text" value={form.username} onChange={updateField('username')} required />
           </label>
           <label>
-            Mật khẩu
+            {t('register.password')}
             <input type="password" value={form.password} onChange={updateField('password')} required />
+            <small className="hint">{t('register.passwordHint')}</small>
           </label>
           <label>
-            Email
+            {t('register.email')}
             <input type="email" value={form.email} onChange={updateField('email')} required />
           </label>
           <label>
-            Họ tên
+            {t('register.fullName')}
             <input type="text" value={form.fullName} onChange={updateField('fullName')} required />
           </label>
           <label>
-            Vai trò
-            <select value={form.role} onChange={updateField('role')}>
-              <option value="DATA_USER">Data User (tải &amp; giải mã file)</option>
-              <option value="DATA_OWNER">Data Owner (upload &amp; chia sẻ file)</option>
-            </select>
-          </label>
-          <label>
-            Khoa / Phòng ban (tuỳ chọn)
+            {t('register.department')}
             <select value={form.departmentId} onChange={updateField('departmentId')}>
-              <option value="">-- Không chọn --</option>
+              <option value="">{t('register.noDepartment')}</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
@@ -93,11 +94,11 @@ export default function RegisterPage() {
             </select>
           </label>
           <button type="submit" className="btn-neon" disabled={loading}>
-            {loading ? 'Đang đăng ký...' : 'Đăng ký'}
+            {loading ? t('register.submitting') : t('register.submit')}
           </button>
         </form>
         <p className="auth-footer-link">
-          Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
+          {t('register.haveAccount')} <Link to="/login">{t('register.loginNow')}</Link>
         </p>
       </div>
     </div>

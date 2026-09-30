@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { apiFetch, TOKEN_STORAGE_KEY } from '../api/client';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const USER_STORAGE_KEY = 'abe_user';
 
@@ -58,11 +59,7 @@ function clearAuth() {
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(readStoredAuth);
 
-  const login = useCallback(async (username, password) => {
-    const response = await apiFetch('/api/auth/login', {
-      method: 'POST',
-      body: { username, password },
-    });
+  const applyAuthResponse = useCallback((response) => {
     persistAuth(response);
     setAuth({
       token: response.token,
@@ -72,25 +69,62 @@ export function AuthProvider({ children }) {
       departmentId: response.departmentId ?? null,
       departmentName: response.departmentName ?? null,
     });
-    return response;
   }, []);
 
-  const register = useCallback(async (payload) => {
-    const response = await apiFetch('/api/auth/register', {
-      method: 'POST',
-      body: payload,
-    });
-    persistAuth(response);
-    setAuth({
-      token: response.token,
-      userId: response.userId,
-      username: response.username,
-      role: response.role,
-      departmentId: response.departmentId ?? null,
-      departmentName: response.departmentName ?? null,
-    });
-    return response;
-  }, []);
+  // ADMIN/DEPT_ADMIN bắt buộc 2FA: nếu response có twoFactorChallenge nghĩa là
+  // password đúng nhưng CHƯA đăng nhập xong - KHÔNG lưu token (vì chưa có token
+  // thật), trả nguyên response để LoginPage tự chuyển sang màn nhập mã 6 số.
+  const login = useCallback(
+    async (username, password) => {
+      const response = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        body: { username, password },
+      });
+      if (!response.twoFactorChallenge) {
+        applyAuthResponse(response);
+      }
+      return response;
+    },
+    [applyAuthResponse]
+  );
+
+  // Bước 2 khi 2FA kích hoạt LẦN ĐẦU (kèm QR vừa quét) - xem AuthService.confirmTwoFactorSetup.
+  const completeTwoFactorSetup = useCallback(
+    async (ticket, code) => {
+      const response = await apiFetch('/api/auth/2fa/confirm-setup', {
+        method: 'POST',
+        body: { ticket, code },
+      });
+      applyAuthResponse(response);
+      return response;
+    },
+    [applyAuthResponse]
+  );
+
+  // Bước 2 khi 2FA đã kích hoạt từ trước - chỉ cần nhập mã hiện tại.
+  const verifyTwoFactor = useCallback(
+    async (ticket, code) => {
+      const response = await apiFetch('/api/auth/2fa/verify', {
+        method: 'POST',
+        body: { ticket, code },
+      });
+      applyAuthResponse(response);
+      return response;
+    },
+    [applyAuthResponse]
+  );
+
+  const register = useCallback(
+    async (payload) => {
+      const response = await apiFetch('/api/auth/register', {
+        method: 'POST',
+        body: payload,
+      });
+      applyAuthResponse(response);
+      return response;
+    },
+    [applyAuthResponse]
+  );
 
   const logout = useCallback(() => {
     clearAuth();
@@ -104,8 +138,10 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      completeTwoFactorSetup,
+      verifyTwoFactor,
     }),
-    [auth, login, register, logout]
+    [auth, login, register, logout, completeTwoFactorSetup, verifyTwoFactor]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -125,6 +161,7 @@ export function useAuth() {
  */
 export function ProtectedRoute({ roles, children }) {
   const { isAuthenticated, role } = useAuth();
+  const { t } = useLanguage();
   const location = useLocation();
 
   if (!isAuthenticated) {
@@ -134,9 +171,7 @@ export function ProtectedRoute({ roles, children }) {
   if (roles && roles.length > 0 && !roles.includes(role)) {
     return (
       <div className="page">
-        <div className="banner banner-error">
-          Bạn không có quyền truy cập trang này.
-        </div>
+        <div className="banner banner-error">{t('protectedRoute.forbidden')}</div>
       </div>
     );
   }

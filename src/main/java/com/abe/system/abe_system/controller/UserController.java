@@ -1,6 +1,7 @@
 package com.abe.system.abe_system.controller;
 
 import com.abe.system.abe_system.dto.UserResponse;
+import com.abe.system.abe_system.dto.auth.RegisterRequest;
 import com.abe.system.abe_system.dto.user.PromoteDeptAdminRequest;
 import com.abe.system.abe_system.entity.User;
 import com.abe.system.abe_system.exception.ResourceNotFoundException;
@@ -30,6 +31,13 @@ public class UserController {
     public List<UserResponse> listAll(Authentication authentication) {
         User caller = currentUser(authentication);
         return userAdminService.listVisibleTo(caller);
+    }
+
+    // ADMIN tạo thay tài khoản giảng viên/sinh viên (xem SecurityConfig -
+    // matcher đặt trước rule chung /api/users/** để chặn DEPT_ADMIN gọi path này).
+    @PostMapping
+    public UserResponse createUser(@Valid @RequestBody RegisterRequest request) {
+        return userAdminService.createUser(request);
     }
 
     // Chỉ ADMIN toàn cục (xem SecurityConfig - matcher đặt trước rule chung /api/users/**).

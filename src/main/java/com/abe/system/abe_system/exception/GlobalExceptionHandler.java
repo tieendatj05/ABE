@@ -35,6 +35,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, "Sai username hoặc password");
     }
 
+    @ExceptionHandler(AccountLockedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountLocked(AccountLockedException ex) {
+        return build(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    @ExceptionHandler(ContentIntegrityException.class)
+    public ResponseEntity<ErrorResponse> handleContentIntegrity(ContentIntegrityException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         // Giữ lại message cụ thể nếu nơi throw đã ghi rõ lý do (vd: FileService báo

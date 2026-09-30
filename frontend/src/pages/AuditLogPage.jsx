@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { useLanguage } from '../i18n/LanguageContext';
 import Banner from '../components/Banner';
 import { formatDate } from '../utils/format';
 
-const ACTION_LABELS = {
-  UPLOAD: 'Upload',
-  DOWNLOAD_SUCCESS: 'Tải xuống thành công',
-  DOWNLOAD_DENIED: 'Bị từ chối tải xuống',
-  DELETE: 'Xoá file',
-};
-
 function actionTagClass(action) {
+  if (action === 'INTEGRITY_VIOLATION') return 'tag tag-critical';
   if (action === 'DOWNLOAD_DENIED') return 'tag tag-revoked';
   if (action === 'UPLOAD' || action === 'DOWNLOAD_SUCCESS') return 'tag tag-active';
   return 'tag';
@@ -19,12 +14,21 @@ function actionTagClass(action) {
 
 // ADMIN xem toàn bộ nhật ký truy cập file trong hệ thống; các role khác (chủ
 // yếu Data Owner) chỉ xem lịch sử truy cập của những file MÌNH SỞ HỮU - phục
-// vụ yêu cầu compliance của hệ thống y tế: phải biết ai đã/cố truy cập hồ sơ.
+// vụ yêu cầu compliance của hệ thống giáo dục: phải biết ai đã/cố truy cập tài liệu.
 export default function AuditLogPage() {
   const { role } = useAuth();
+  const { t } = useLanguage();
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const actionLabels = {
+    UPLOAD: t('auditLog.actionUpload'),
+    DOWNLOAD_SUCCESS: t('auditLog.actionDownloadSuccess'),
+    DOWNLOAD_DENIED: t('auditLog.actionDownloadDenied'),
+    DELETE: t('auditLog.actionDelete'),
+    INTEGRITY_VIOLATION: t('auditLog.actionIntegrityViolation'),
+  };
 
   useEffect(() => {
     const path = role === 'ADMIN' ? '/api/audit-logs' : '/api/audit-logs/mine';
@@ -32,38 +36,34 @@ export default function AuditLogPage() {
     setError('');
     apiFetch(path)
       .then((data) => setLogs(data || []))
-      .catch((err) => setError(err.message || 'Không tải được nhật ký truy cập'))
+      .catch((err) => setError(err.message || t('auditLog.loadFailed')))
       .finally(() => setLoading(false));
-  }, [role]);
+  }, [role, t]);
 
   if (loading) {
     return (
       <div className="page">
-        <p>Đang tải...</p>
+        <p>{t('common.loading')}</p>
       </div>
     );
   }
 
   return (
     <div className="page">
-      <h1>Nhật ký truy cập file</h1>
-      <p>
-        {role === 'ADMIN'
-          ? 'Toàn bộ sự kiện upload/tải xuống/xoá file trong hệ thống.'
-          : 'Lịch sử truy cập (kể cả bị từ chối) đối với các file bạn sở hữu.'}
-      </p>
+      <h1>{t('auditLog.title')}</h1>
+      <p>{role === 'ADMIN' ? t('auditLog.subtitleAdmin') : t('auditLog.subtitleOwner')}</p>
       <Banner message={error} />
 
       <table className="table">
         <thead>
           <tr>
-            <th>Thời gian</th>
-            <th>Hành động</th>
-            <th>File</th>
-            <th>Chủ sở hữu</th>
-            <th>Người yêu cầu</th>
-            <th>Access Policy</th>
-            <th>Chi tiết</th>
+            <th>{t('auditLog.colTime')}</th>
+            <th>{t('auditLog.colAction')}</th>
+            <th>{t('auditLog.colFile')}</th>
+            <th>{t('auditLog.colOwner')}</th>
+            <th>{t('auditLog.colRequester')}</th>
+            <th>{t('auditLog.colPolicy')}</th>
+            <th>{t('auditLog.colDetail')}</th>
           </tr>
         </thead>
         <tbody>
@@ -71,7 +71,7 @@ export default function AuditLogPage() {
             <tr key={log.id}>
               <td>{formatDate(log.occurredAt)}</td>
               <td>
-                <span className={actionTagClass(log.action)}>{ACTION_LABELS[log.action] || log.action}</span>
+                <span className={actionTagClass(log.action)}>{actionLabels[log.action] || log.action}</span>
               </td>
               <td>{log.fileName}</td>
               <td>{log.ownerUsername}</td>
@@ -82,7 +82,7 @@ export default function AuditLogPage() {
           ))}
           {logs.length === 0 && (
             <tr>
-              <td colSpan={7}>Chưa có sự kiện nào.</td>
+              <td colSpan={7}>{t('auditLog.empty')}</td>
             </tr>
           )}
         </tbody>

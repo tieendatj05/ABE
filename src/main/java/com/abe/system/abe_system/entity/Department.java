@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 /**
  * Entity Department - ánh xạ tới bảng "departments".
  *
- * Đại diện cho một khoa/phòng ban trong bệnh viện (vd "Khoa Nội", mã "NOI").
+ * Đại diện cho một khoa/bộ môn trong trường học (vd "Khoa CNTT", mã "CNTT").
  * Đây là nền tảng cho mô hình ABE phi tập trung hóa: mỗi Department có thể có
  * một User giữ vai trò DEPT_ADMIN (KGC riêng của phòng ban đó), tự quản lý tập
  * thuộc tính (Attribute.issuerDepartment) và user (User.department) của mình,
@@ -35,7 +35,7 @@ public class Department {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Tên đầy đủ, hiển thị trên giao diện, vd "Khoa Nội".
+    // Tên đầy đủ, hiển thị trên giao diện, vd "Khoa CNTT".
     @NotBlank
     @Column(nullable = false, unique = true, length = 100)
     private String name;

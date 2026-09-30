@@ -1,5 +1,6 @@
 package com.abe.system.abe_system.config;
 
+import com.abe.system.abe_system.ratelimit.RateLimitFilter;
 import com.abe.system.abe_system.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +35,7 @@ public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitFilter rateLimitFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -59,6 +61,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Đổi mật khẩu của chính mình - đặt TRƯỚC rule permitAll chung của
+                        // /api/auth/** bên dưới, vì path này CẦN đăng nhập (biết đang là ai).
+                        .requestMatchers(HttpMethod.PATCH, "/api/auth/change-password").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         // Department là dữ liệu tham chiếu không nhạy cảm (tên khoa/phòng ban)
                         // và RegisterPage cần load danh sách này TRƯỚC KHI đăng nhập.
@@ -70,8 +75,10 @@ public class SecurityConfig {
                         // ABE phi tập trung hóa: DEPT_ADMIN cũng được quản lý attribute, nhưng
                         // chỉ trong phạm vi phòng ban của mình (kiểm tra ở AttributeService).
                         .requestMatchers("/api/attributes/**").hasAnyRole("ADMIN", "DEPT_ADMIN")
-                        // Phong DEPT_ADMIN chỉ ADMIN toàn cục được làm - đặt TRƯỚC rule chung /api/users/**.
+                        // Phong DEPT_ADMIN, và tạo thay tài khoản giảng viên/sinh viên, chỉ ADMIN
+                        // toàn cục được làm - đặt TRƯỚC rule chung /api/users/**.
                         .requestMatchers(HttpMethod.POST, "/api/users/promote-dept-admin").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/users").hasRole("ADMIN")
                         .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "DEPT_ADMIN")
                         // Data Owner xem lịch sử truy cập các file của chính mình - mọi role đã đăng nhập.
                         .requestMatchers(HttpMethod.GET, "/api/audit-logs/mine").authenticated()
@@ -81,7 +88,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/files/**").authenticated()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // Đặt SAU JwtAuthenticationFilter: rate-limit theo username (endpoint download)
+                // cần SecurityContext đã có Authentication trước đó.
+                .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

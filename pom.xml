@@ -53,6 +53,44 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Flyway: quản lý schema DB bằng migration file thay vì
+		     spring.jpa.hibernate.ddl-auto=update (xem db/migration/V1__init.sql).
+		     Spring Boot 4 tách autoconfiguration Flyway ra module riêng
+		     spring-boot-starter-flyway (không còn nằm trong spring-boot-autoconfigure
+		     như bản 3.x) - thiếu module này thì Flyway sẽ KHÔNG tự chạy migration dù
+		     có flyway-core trên classpath. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+
+		<!-- MinIO: object storage cho ciphertext file (thay ổ đĩa local) -
+		     xem package storage/. -->
+		<dependency>
+			<groupId>io.minio</groupId>
+			<artifactId>minio</artifactId>
+			<version>8.5.17</version>
+		</dependency>
+
+		<!-- Bucket4j: rate limit API (chống spam/DDoS) - xem package ratelimit/. -->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j-core</artifactId>
+			<version>8.10.1</version>
+		</dependency>
+
+		<!-- TOTP (Google Authenticator) cho 2FA bắt buộc với ADMIN/DEPT_ADMIN -
+		     xem package twofactor/. -->
+		<dependency>
+			<groupId>dev.samstevens.totp</groupId>
+			<artifactId>totp</artifactId>
+			<version>1.7.1</version>
+		</dependency>
+
 		<!-- JWT: sinh và kiểm tra access token cho cơ chế đăng nhập stateless -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>

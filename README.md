@@ -1,11 +1,11 @@
 # ABE System
 
-Hệ thống quản lý chia sẻ file dựa trên thuộc tính (Attribute-Based Access Control), đồ án tốt nghiệp — mô phỏng phân quyền truy cập chi tiết trong hệ thống y tế dựa trên **vai trò và khoa/phòng ban** của nhân viên (NT219 — Mật mã học). Data Owner upload hồ sơ, mã hoá nội dung bằng AES; khoá AES được bảo vệ theo một **chính sách truy cập** (biểu thức AND/OR trên các attribute, ví dụ `department:NOI AND position:bac_si`) bằng Shamir Secret Sharing. Chỉ Data User có đủ attribute thoả chính sách mới khôi phục được khoá AES để giải mã file.
+Hệ thống quản lý chia sẻ file dựa trên thuộc tính (Attribute-Based Access Control), đồ án tốt nghiệp — mô phỏng phân quyền truy cập chi tiết trong hệ thống giáo dục dựa trên **vai trò và khoa/bộ môn** của giảng viên/nhân viên (NT219 — Mật mã học). Data Owner upload tài liệu (đề thi, bảng điểm, tài liệu học vụ...), mã hoá nội dung bằng AES; khoá AES được bảo vệ theo một **chính sách truy cập** (biểu thức AND/OR trên các attribute, ví dụ `department:CNTT AND position:giang_vien`) bằng Shamir Secret Sharing. Chỉ Data User có đủ attribute thoả chính sách mới khôi phục được khoá AES để giải mã file.
 
 Ngoài lõi ABE, hệ thống còn có 2 tính năng mở rộng:
 
-- **Mô hình ABE phi tập trung hoá (decentralized ABE)**: bên cạnh ADMIN toàn cục, mỗi khoa/phòng ban có thể có một `DEPT_ADMIN` — một KGC thu nhỏ chỉ được tạo/xoá attribute và gán/thu hồi attribute đó cho nhân viên **trong phạm vi phòng ban của chính mình**.
-- **Audit log (nhật ký truy cập)**: mọi lần upload/tải xuống (thành công hoặc bị từ chối)/xoá file đều được ghi lại — kể cả sau khi file bị xoá — phục vụ yêu cầu truy vết (compliance) đặc trưng của hệ thống y tế.
+- **Mô hình ABE phi tập trung hoá (decentralized ABE)**: bên cạnh ADMIN toàn cục, mỗi khoa/bộ môn có thể có một `DEPT_ADMIN` — một KGC thu nhỏ chỉ được tạo/xoá attribute và gán/thu hồi attribute đó cho giảng viên/nhân viên **trong phạm vi khoa của chính mình**.
+- **Audit log (nhật ký truy cập)**: mọi lần upload/tải xuống (thành công hoặc bị từ chối)/xoá file đều được ghi lại — kể cả sau khi file bị xoá — phục vụ yêu cầu truy vết (compliance), ví dụ chứng minh đề thi chưa từng bị mở trước ngày thi.
 
 ## Vai trò (Role)
 
@@ -19,20 +19,46 @@ Ngoài lõi ABE, hệ thống còn có 2 tính năng mở rộng:
 ## Công nghệ
 
 - Backend: Java 25, Spring Boot 4.1.1 (Web MVC, Data JPA, Security, Validation)
-- PostgreSQL 18
+- PostgreSQL 18, quản lý schema bằng **Flyway** (`src/main/resources/db/migration/`)
 - JWT (jjwt) cho xác thực stateless, BCrypt cho hash password
 - Lombok, Maven (dùng qua `mvnw`/`mvnw.cmd`, không cần cài Maven riêng)
 - Lõi ABE tự cài đặt (không dùng thư viện pairing-based CP-ABE): AES-256/GCM mã hoá nội dung file
   + Shamir Secret Sharing (tự cài bằng `BigInteger`, xem gói `crypto/`) chia khoá AES theo cây
   chính sách AND/OR — xem chi tiết ở mục [Lõi mã hoá (ABE)](#lõi-mã-hoá-abe) bên dưới.
-- Frontend: React (Vite, JavaScript thuần) trong thư mục [frontend/](frontend/), gọi REST API ở trên.
+- Frontend: React (Vite, JavaScript thuần) trong thư mục [frontend/](frontend/), gọi REST API ở trên,
+  đa ngôn ngữ Việt/Anh.
+- Docker Compose để chạy cả hệ thống (Postgres + backend + frontend) bằng 1 lệnh — xem mục
+  [Chạy bằng Docker Compose](#chạy-bằng-docker-compose) bên dưới.
 
 ## Yêu cầu môi trường
 
 - JDK 25
-- PostgreSQL đang chạy (khuyến nghị dùng pgAdmin để quản lý)
+- PostgreSQL đang chạy (khuyến nghị dùng pgAdmin để quản lý) — hoặc dùng Docker Compose để khỏi cần
+  cài Postgres/Node riêng, xem mục [Chạy bằng Docker Compose](#chạy-bằng-docker-compose)
 
-## Cài đặt & chạy
+## Chạy bằng Docker Compose
+
+Cách nhanh nhất để chạy thử toàn bộ hệ thống (không cần cài JDK/Node/Postgres riêng), chỉ cần Docker:
+
+```bash
+docker compose up --build
+```
+
+- Backend: `http://localhost:8080`
+- Frontend: `http://localhost:5173`
+- Postgres: `localhost:5432` (user/password `postgres`/`postgres`, database `abe_system`)
+
+Lần đầu chạy trên database rỗng, Flyway tự tạo toàn bộ bảng theo
+[V1__init.sql](src/main/resources/db/migration/V1__init.sql). Dữ liệu Postgres và file đã upload
+được lưu ở Docker volume (`db_data`, `storage_data`) nên `docker compose down` không mất dữ liệu (chỉ
+mất khi thêm cờ `-v`). Vẫn cần tạo tài khoản ADMIN đầu tiên bằng SQL như mục
+[Tạo tài khoản ADMIN đầu tiên](#4-tạo-tài-khoản-admin-đầu-tiên) bên dưới (kết nối vào Postgres ở
+`localhost:5432` bằng psql/pgAdmin).
+
+**Lưu ý:** cấu hình Docker Compose này (bao gồm mật khẩu Postgres đặt cứng) chỉ dùng để chạy thử/demo
+local, chưa validate cho production.
+
+## Cài đặt & chạy (không dùng Docker)
 
 ### 1. Tạo database
 
@@ -96,23 +122,24 @@ Base URL: `http://localhost:8080`
 
 ### Auth (`/api/auth`) — public, không cần token
 
-**Đăng ký** (chỉ được chọn role `DATA_OWNER` hoặc `DATA_USER`; `departmentId` tuỳ chọn):
+**Đăng ký** (chỉ được chọn role `DATA_OWNER` hoặc `DATA_USER`; `departmentId` tuỳ chọn; `password`
+phải ≥ 8 ký tự và có đủ chữ hoa/chữ thường/số/ký tự đặc biệt):
 ```bash
 curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"owner1","password":"secret123","email":"owner1@test.com","fullName":"Data Owner","role":"DATA_OWNER","departmentId":1}'
+  -d '{"username":"owner1","password":"Secret123!","email":"owner1@test.com","fullName":"Data Owner","role":"DATA_OWNER","departmentId":1}'
 ```
 
 **Đăng nhập** — trả về JWT:
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"owner1","password":"secret123"}'
+  -d '{"username":"owner1","password":"Secret123!"}'
 ```
 
 Response mẫu:
 ```json
-{"token":"eyJhbGciOi...", "tokenType":"Bearer", "userId":1, "username":"owner1", "role":"DATA_OWNER", "departmentId":1, "departmentName":"Khoa Nội"}
+{"token":"eyJhbGciOi...", "tokenType":"Bearer", "userId":1, "username":"owner1", "role":"DATA_OWNER", "departmentId":1, "departmentName":"Khoa CNTT"}
 ```
 
 Các API bên dưới đều cần header `Authorization: Bearer <token>`.
@@ -122,7 +149,7 @@ Các API bên dưới đều cần header `Authorization: Bearer <token>`.
 | Method | Path | Role | Mô tả |
 |---|---|---|---|
 | GET | `/api/departments` | public (không cần token) | Liệt kê phòng ban — dùng cho dropdown ở trang đăng ký |
-| POST | `/api/departments` | `ADMIN` | Tạo phòng ban — body `{"name":"Khoa Nội","code":"NOI","description":"..."}` |
+| POST | `/api/departments` | `ADMIN` | Tạo phòng ban — body `{"name":"Khoa CNTT","code":"CNTT","description":"..."}` |
 | DELETE | `/api/departments/{id}` | `ADMIN` | Xoá phòng ban (báo lỗi 400 nếu còn user/attribute đang tham chiếu) |
 
 ### Attribute (`/api/attributes`) — `ADMIN` hoặc `DEPT_ADMIN`
@@ -133,7 +160,7 @@ phòng ban — vi phạm sẽ nhận `403` (mô hình ABE phi tập trung hoá).
 
 | Method | Path | Mô tả |
 |---|---|---|
-| POST | `/api/attributes` | Tạo attribute mới — body `{"attributeName":"department:NOI","description":"...","departmentId":1}`. `departmentId` bỏ trống = attribute toàn cục (chỉ `ADMIN` làm được); `DEPT_ADMIN` luôn bị ép về phòng ban của chính mình bất kể gửi gì |
+| POST | `/api/attributes` | Tạo attribute mới — body `{"attributeName":"department:CNTT","description":"...","departmentId":1}`. `departmentId` bỏ trống = attribute toàn cục (chỉ `ADMIN` làm được); `DEPT_ADMIN` luôn bị ép về phòng ban của chính mình bất kể gửi gì |
 | GET | `/api/attributes` | `ADMIN` thấy tất cả; `DEPT_ADMIN` thấy attribute toàn cục + của phòng ban mình |
 | DELETE | `/api/attributes/{id}` | Xoá attribute |
 | POST | `/api/attributes/assign` | Gán attribute cho user — body `{"userId":1,"attributeId":1}` |
@@ -155,7 +182,8 @@ phòng ban — vi phạm sẽ nhận `403` (mô hình ABE phi tập trung hoá).
 | GET | `/api/audit-logs/mine` | đã đăng nhập | Sự kiện của các file **mình sở hữu** (Data Owner theo dõi ai đã/cố truy cập hồ sơ của mình) |
 
 Mỗi bản ghi audit log là **snapshot độc lập** (không FK tới file/user) nên vẫn còn nguyên vẹn kể cả
-sau khi file bị xoá — đúng tinh thần audit trail cho hệ thống y tế.
+sau khi file bị xoá — đúng tinh thần audit trail cho hệ thống giáo dục (vd chứng minh không ai mở đề
+thi trước ngày thi).
 
 ### File (`/api/files`) — lõi ABE
 
@@ -178,12 +206,14 @@ curl -o bao_cao.pdf http://localhost:8080/api/files/1/download \
   -H "Authorization: Bearer $USER_TOKEN"
 ```
 
-Ví dụ theo kịch bản y tế: Data Owner (nhân viên Khoa Nội) upload kết quả xét nghiệm, chỉ bác sĩ Khoa Nội hoặc ADMIN mới giải mã được:
+Ví dụ theo kịch bản giáo dục: Data Owner (giảng viên Khoa CNTT) upload đề thi cuối kỳ, chỉ giảng viên
+Khoa CNTT hoặc ADMIN mới giải mã được **trước ngày thi** (sinh viên dù có tài khoản hợp lệ cũng không
+đủ attribute `position:giang_vien` nên không mở được, ngăn lộ đề):
 ```bash
 curl -X POST http://localhost:8080/api/files/upload \
   -H "Authorization: Bearer $OWNER_TOKEN" \
-  -F "file=@ket_qua_xet_nghiem.pdf" \
-  -F "accessPolicy=(department:NOI AND position:bac_si) OR role:ADMIN"
+  -F "file=@de_thi_cuoi_ky.pdf" \
+  -F "accessPolicy=(department:CNTT AND position:giang_vien) OR role:ADMIN"
 ```
 
 Gọi sai role hoặc thiếu token sẽ nhận `403 Forbidden`; sai username/password khi login nhận `401 Unauthorized`.
@@ -250,15 +280,33 @@ frontend/          # React (Vite) - giao diện test toàn bộ API trên
   giới hạn phạm vi tạo/gán/thu hồi attribute theo phòng ban, endpoint phong `DEPT_ADMIN`
 - [x] **Audit log**: ghi nhận upload/download (thành công/bị từ chối)/xoá file, sống sót qua việc xoá
   file (snapshot, không FK), xem được qua `/api/audit-logs` (ADMIN) và `/api/audit-logs/mine` (chủ file)
-- [x] Test tự động cho crypto core + service (`ShamirSecretSharingTest`, `PolicyParserTest`,
+- [x] Test tự động cho crypto core + service + security (`ShamirSecretSharingTest`, `PolicyParserTest`,
   `PolicyKeyDistributorTest`, `AesFileCipherTest`, `FileServiceIntegrationTest`, `AttributeServiceTest`,
-  `DepartmentServiceTest`, `AuthServiceTest` — chạy trên H2, không cần Postgres)
-- [x] Trang/giao diện frontend (React, xem mục trên)
+  `DepartmentServiceTest`, `AuthServiceTest`, `JwtServiceTest`, `SecurityAuthorizationIntegrationTest` —
+  chạy trên H2, không cần Postgres)
+- [x] Trang/giao diện frontend (React, xem mục trên), đa ngôn ngữ Việt/Anh
+- [x] **Chống dò mật khẩu (brute-force)**: khoá tạm tài khoản sau 5 lần đăng nhập sai liên tiếp trong
+  15 phút (`LoginAttemptService`, cấu hình qua `security.login.max-attempts`/`security.login.lockout-minutes`)
+- [x] **Mật khẩu mạnh bắt buộc khi đăng ký**: ≥ 8 ký tự, có đủ chữ hoa/chữ thường/số/ký tự đặc biệt
+- [x] **Chọn thuộc tính bằng giao diện** thay vì gõ tay cú pháp policy ở trang Upload (chế độ "Chọn
+  nhanh" build sẵn từ attribute của chính owner, hoặc "Nâng cao" để tự viết policy phức tạp)
+- [x] **Trực quan hoá cây chính sách AND/OR** (`PolicyTreeDiagram`) ở trang Upload và trong danh sách
+  file - cùng cấu trúc cây mà `PolicyKeyDistributor` dùng thật để chia khoá Shamir
+- [x] **Dashboard thống kê cho ADMIN** (`/admin/dashboard`): số file theo khoa/phòng ban, số sự kiện
+  theo loại hành động, tỉ lệ tải xuống thành công/bị từ chối
+- [x] **Đổi mật khẩu tự phục vụ** (`PATCH /api/auth/change-password`, mọi role) và **phân trang**
+  danh sách file (client-side, 10 dòng/trang)
+- [x] **Flyway migration** thay `ddl-auto=update` (`db/migration/V1__init.sql`, xem mục
+  [Công nghệ](#công-nghệ)) — Hibernate chỉ validate schema, không tự sinh DDL nữa
+- [x] **Docker Compose** chạy cả hệ thống bằng 1 lệnh — xem mục
+  [Chạy bằng Docker Compose](#chạy-bằng-docker-compose)
 
 ## Có thể làm thêm (không thuộc phạm vi lõi ABE)
 
 - [ ] Đổi mật khẩu / quản lý hồ sơ user
 - [ ] Phân trang cho danh sách file khi số lượng lớn
+- [ ] Refresh token cho JWT (hiện token sống 24h, không thu hồi được giữa chừng) — cân nhắc kỹ vì đây
+  là thay đổi kiến trúc lớn hơn (ảnh hưởng cả luồng lưu token ở frontend), chưa cấp thiết cho quy mô đồ án
 - [ ] Deploy production thật (hiện `jwt.secret`, mật khẩu DB đang để plaintext trong `application.properties`, chỉ dùng cho local/đồ án)
 
 ## Test

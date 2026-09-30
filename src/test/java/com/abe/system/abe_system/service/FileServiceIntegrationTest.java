@@ -4,11 +4,14 @@ import com.abe.system.abe_system.dto.file.FileResponse;
 import com.abe.system.abe_system.entity.AuditAction;
 import com.abe.system.abe_system.entity.AuditLog;
 import com.abe.system.abe_system.entity.Attribute;
+import com.abe.system.abe_system.entity.FileMetadata;
 import com.abe.system.abe_system.entity.Role;
 import com.abe.system.abe_system.entity.User;
 import com.abe.system.abe_system.entity.UserAttribute;
+import com.abe.system.abe_system.exception.ContentIntegrityException;
 import com.abe.system.abe_system.repository.AttributeRepository;
 import com.abe.system.abe_system.repository.AuditLogRepository;
+import com.abe.system.abe_system.repository.FileMetadataRepository;
 import com.abe.system.abe_system.repository.UserAttributeRepository;
 import com.abe.system.abe_system.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -44,6 +47,8 @@ class FileServiceIntegrationTest {
     private UserAttributeRepository userAttributeRepository;
     @Autowired
     private AuditLogRepository auditLogRepository;
+    @Autowired
+    private FileMetadataRepository fileMetadataRepository;
 
     @Test
     void ownerUploadsFileAndUserWithMatchingAttributeCanDecryptIt() {
@@ -199,5 +204,65 @@ class FileServiceIntegrationTest {
         List<AuditLog> logs = auditLogRepository.findByFileIdOrderByOccurredAtDesc(fileId);
         assertThat(logs).extracting(AuditLog::getAction).contains(AuditAction.DELETE);
         assertThat(logs).allMatch(l -> l.getFileName().equals("delete_me.txt"));
+    }
+
+    @Test
+    void mismatchedContentHashIsDetectedAsIntegrityViolation() {
+        Attribute attribute = attributeRepository.save(
+                Attribute.builder().attributeName("role:ADMIN").description("Admin").build());
+        User owner = userRepository.save(User.builder()
+                .username("integrity_owner").password("x").email("integrity_owner@test.com")
+                .fullName("Integrity Owner").role(Role.DATA_OWNER).build());
+        User user = userRepository.save(User.builder()
+                .username("integrity_user").password("x").email("integrity_user@test.com")
+                .fullName("Integrity User").role(Role.DATA_USER).build());
+        userAttributeRepository.save(UserAttribute.builder().user(user).attribute(attribute).build());
+
+        byte[] content = "noi dung goc".getBytes(StandardCharsets.UTF_8);
+        MockMultipartFile file = new MockMultipartFile("file", "doc.txt", "text/plain", content);
+        FileResponse uploaded = fileService.upload(file, "role:ADMIN", owner);
+
+        // Truoc khi hash bi "sai lech": tai binh thuong.
+        assertThat(fileService.download(uploaded.getId(), user).content()).isEqualTo(content);
+
+        // Mo phong hash luu trong DB bi sai lech so voi noi dung that (vd du lieu bi
+        // can thiep o mot tang khac ngoai pham vi AES-GCM, hoac loi phan mem) - sua
+        // truc tiep ban ghi DB thay vi sua ciphertext, vi sua ciphertext se bi chinh
+        // AES-GCM tu chan lai truoc khi toi duoc buoc kiem tra hash nay.
+        FileMetadata metadata = fileMetadataRepository.findById(uploaded.getId()).orElseThrow();
+        metadata.setContentHash("0".repeat(64));
+        fileMetadataRepository.save(metadata);
+
+        assertThatThrownBy(() -> fileService.download(uploaded.getId(), user))
+                .isInstanceOf(ContentIntegrityException.class)
+                .hasMessage("Tài liệu đã bị can thiệp");
+
+        List<AuditLog> logs = auditLogRepository.findByFileIdOrderByOccurredAtDesc(uploaded.getId());
+        assertThat(logs).extracting(AuditLog::getAction).contains(AuditAction.INTEGRITY_VIOLATION);
+    }
+
+    @Test
+    void fileWithoutStoredHashSkipsIntegrityCheck() {
+        // Mo phong file da upload TRUOC khi co tinh nang nay (contentHash = null) -
+        // download van phai thanh cong binh thuong, khong bi bao loi oan cho du lieu cu.
+        Attribute attribute = attributeRepository.save(
+                Attribute.builder().attributeName("role:ADMIN").description("Admin").build());
+        User owner = userRepository.save(User.builder()
+                .username("legacy_owner").password("x").email("legacy_owner@test.com")
+                .fullName("Legacy Owner").role(Role.DATA_OWNER).build());
+        User user = userRepository.save(User.builder()
+                .username("legacy_user").password("x").email("legacy_user@test.com")
+                .fullName("Legacy User").role(Role.DATA_USER).build());
+        userAttributeRepository.save(UserAttribute.builder().user(user).attribute(attribute).build());
+
+        byte[] content = "du lieu cu".getBytes(StandardCharsets.UTF_8);
+        MockMultipartFile file = new MockMultipartFile("file", "old.txt", "text/plain", content);
+        FileResponse uploaded = fileService.upload(file, "role:ADMIN", owner);
+
+        FileMetadata metadata = fileMetadataRepository.findById(uploaded.getId()).orElseThrow();
+        metadata.setContentHash(null);
+        fileMetadataRepository.save(metadata);
+
+        assertThat(fileService.download(uploaded.getId(), user).content()).isEqualTo(content);
     }
 }
